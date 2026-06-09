@@ -3,7 +3,7 @@ import {
   Trophy, AlertTriangle, Target, Phone, Send, DollarSign, CheckCircle2, Circle, LogOut,
   Users, LayoutDashboard, ClipboardList, Link2, PartyPopper, TrendingUp, Lock, Briefcase,
   Mail, KeyRound, RotateCcw, Copy, Star, ExternalLink, Quote, Settings as Cog, CalendarDays,
-  PlayCircle, ChevronDown, ChevronRight, Video, MessageSquare, Menu, X
+  PlayCircle, ChevronDown, ChevronRight, Video, MessageSquare, Menu, X, BookOpen, Trash2
 } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell } from "recharts";
 import { db as store } from "./lib/db";
@@ -22,6 +22,7 @@ async function hashPw(pw) { const b = await crypto.subtle.digest("SHA-256", new 
 const uid = () => Math.random().toString(36).slice(2, 9);
 const code6 = () => Math.random().toString(36).slice(2, 8).toUpperCase();
 const today = () => new Date().toISOString().slice(0, 10);
+const thisMonth = () => new Date().toISOString().slice(0, 7);
 const daysAgo = (d) => d ? Math.floor((Date.now() - new Date(d + "T00:00:00").getTime()) / 86400000) : null;
 const fmtMoney = (n) => "$" + (Number(n) || 0).toLocaleString();
 const pct = (a, b) => (b > 0 ? Math.round((a / b) * 100) : 0);
@@ -29,12 +30,12 @@ const pct = (a, b) => (b > 0 ? Math.round((a / b) * 100) : 0);
 /* ============================ 30-DAY ROADMAP (mapped to real Closing Cabal curriculum) ============================
    Each day: videos[] are real lessons (admin sets the URL per video in Roadmap Links);
    actions[] are the do-the-work tasks. A day completes when every video + action is checked. */
-const V = (t, dur) => ({ t, dur });
+const V = (t, dur, doc) => ({ t, dur, doc: !!doc });
 const ROADMAP = [
   { d: 1, phase: "Foundations & Outreach", title: "Start Here", focus: "Get oriented and plant your flag.", videos: [V("My Story...", "7:52"), V("The Reality of Being in The Inner Circle", "3:49"), V("Your Step by Step Blueprint", "4:44")], actions: ["Introduce yourself in the community chat", "Post your #1 goal in #accountability", "Set your goal in Settings", "Comment on 2 other intros in Discord"] },
   { d: 2, phase: "Foundations & Outreach", title: "Mindset & The Toolkit", focus: "Know what the job takes and set your standard.", videos: [V("The Tools required to Be a 6 Figure Closer", "5:02"), V("Routine/Mindset", "13:36")], actions: ["Join today's live coaching call (Mon–Fri)", "Run 1 mock call", "Post your daily takeaway in #accountability", "React to 3 wins in the Wins tab"] },
   { d: 3, phase: "Foundations & Outreach", title: "Outreach Starts — Who To Target", focus: "Start filling your pipeline on Day 3 — the lag is real, so begin now.", videos: [V("Key to Doing Outreach", "17:04"), V("Perfect Example of Who to Find to DM", "")], actions: ["Build your outreach list (25 prospects)", "Send 10 outreach DMs", "Post your numbers in #accountability"] },
-  { d: 4, phase: "Foundations & Outreach", title: "The DM", focus: "Open conversations that actually get replies.", videos: [V("How to Send a DM With or Without Experience", ""), V("What to Look For in an Offer", "3:57")], actions: ["Send 15 outreach DMs", "Run 1 mock call", "Post your numbers in #accountability", "Comment on 3 posts in the community"] },
+  { d: 4, phase: "Foundations & Outreach", title: "The DM", focus: "Open conversations that actually get replies.", videos: [V("How to Send a DM With or Without Experience", "", true), V("What to Look For in an Offer", "3:57")], actions: ["Send 15 outreach DMs", "Run 1 mock call", "Post your numbers in #accountability", "Comment on 3 posts in the community"] },
   { d: 5, phase: "Foundations & Outreach", title: "Build Your Presence", focus: "Make inbound easier while you push outbound.", videos: [V("How to Make Your FYP Perfect for Mass Outreach", "9:20")], actions: ["Send 15 outreach DMs", "Post or engage on content to warm your FYP", "Run 1 mock call", "Post your daily update in #accountability"] },
   { d: 6, phase: "Foundations & Outreach", title: "Mindset To Sustain It", focus: "Outreach is a grind — build the mind for it.", videos: [V("You NEED This Mindset for Sales", "26:50")], actions: ["Send 15 outreach DMs", "Join the live coaching call", "Run 1 mock call", "Post in #accountability"] },
   { d: 7, phase: "Core Sales Skill", title: "1-on-1 With Coach Josiah", focus: "Your first personal checkpoint.", videos: [V("Blueprint to Key Sales Process", "20:32")], actions: ["Book & complete your 1-on-1 with Coach Josiah", "Send 15 outreach DMs", "Post your biggest takeaway in #accountability"] },
@@ -45,7 +46,7 @@ const ROADMAP = [
   { d: 12, phase: "Core Sales Skill", title: "Open The Pain — Start Applying", focus: "You can run a call now — go get a seat.", videos: [V("Opening Up Pain & Understanding Problems", "7:21"), V("Using Consequence Questions", "9:06")], actions: ["Send 25 outreach DMs", "Apply to your first offer in the Opportunities tab", "Run 2 mock calls", "Post that you applied in #accountability"] },
   { d: 13, phase: "Core Sales Skill", title: "Make The Offer", focus: "Present the offer and ask.", videos: [V("Making The Offer and Closing the Deal", "8:36"), V("Past, Present, Future Sales Technique", "8:40")], actions: ["Send 25 outreach DMs", "Apply to 2 more opportunities", "Run 2 mock calls", "Post your numbers in #accountability"] },
   { d: 14, phase: "Core Sales Skill", title: "Objections I", focus: "The psychology behind 'no'.", videos: [V("The Psychology of Objections", "11:51"), V("Pre-Handling Objections", "3:13")], actions: ["Send 30 outreach DMs", "Run a mock interview", "Follow up on every application sent", "Post in #accountability"] },
-  { d: 15, phase: "Core Sales Skill", title: "Objections II", focus: "Master the full objection game.", videos: [V("Step by Step to Master Objection Handling", "15:45"), V("The 1-10 Sales Technique", "7:27"), V("How Important is This For You", "")], actions: ["Send 30 outreach DMs", "Run 1 full mock call start-to-finish & get it reviewed", "Apply to 1 more opportunity", "Post your reps in #accountability"] },
+  { d: 15, phase: "Core Sales Skill", title: "Objections II", focus: "Master the full objection game.", videos: [V("Step by Step to Master Objection Handling", "15:45"), V("The 1-10 Sales Technique", "7:27"), V("How Important is This For You", "", true)], actions: ["Send 30 outreach DMs", "Run 1 full mock call start-to-finish & get it reviewed", "Apply to 1 more opportunity", "Post your reps in #accountability"] },
   { d: 16, phase: "Apply & Interview", title: "Live Objection Reps", focus: "Watch it done live, then do it.", videos: [V("Objection Handling Live Mock Call", "14:15"), V("Objection Handling Lesson Live Mock Call", "8:24")], actions: ["Send 30 outreach DMs", "Run 2 mock calls", "Run a mock interview with a partner", "Post your numbers in #accountability"] },
   { d: 17, phase: "Apply & Interview", title: "Consistency Under Pressure", focus: "Keep the machine running while you interview.", videos: [V("How to Stay Consistent in Sales", "7:12")], actions: ["Send 35 outreach DMs", "Follow up on every open application", "Run 1 mock call", "Post in #accountability"] },
   { d: 18, phase: "Apply & Interview", title: "Nail The Interview", focus: "Treat the interview like a sales call.", videos: [V("How to Nail An Interview", "16:39")], actions: ["Send 35 outreach DMs", "Run a mock interview", "Apply to 2 more opportunities", "Post in #accountability"] },
@@ -237,10 +238,13 @@ function AuthScreen({ users, persistUsers, onLogin, refreshUsers }) {
 function RoadmapView({ me }) {
   const [rm, setRm] = useState(null);
   const [links, setLinks] = useState({});
+  const [booking, setBooking] = useState("");
   const [open, setOpen] = useState(null); // set of manually toggled days
   useEffect(() => { (async () => {
     setRm((await store.get(K.roadmap(me.id))) || { checked: {} });
-    setLinks(((await store.get(K.config)) || {}).links || {});
+    const cfg = (await store.get(K.config)) || {};
+    setLinks(cfg.links || {});
+    setBooking(cfg.bookingUrl || "");
   })(); }, [me.id]);
   if (!rm) return <div className="empty">Loading roadmap…</div>;
 
@@ -287,17 +291,19 @@ function RoadmapView({ me }) {
                     {done ? <CheckCircle2 size={20} style={{ color: "var(--green)" }} /> : !locked ? (opened ? <ChevronDown size={18} className="dim" /> : <ChevronRight size={18} className="dim" />) : null}
                   </div>
                   {opened && <div className="day-body">
+                    {day.d === 7 && booking && <a className="book-call" href={booking} target="_blank" rel="noreferrer"><CalendarDays size={16} /> Book your 1-on-1 with Coach Josiah</a>}
                     {items.map((it, i) => {
                       const on = checked(day.d).includes(i);
                       if (it.kind === "video") {
                         const vIdx = day.videos.findIndex((v) => v.t === it.t);
                         const url = links[`${day.d}-${vIdx}`];
+                        const isDoc = it.doc;
                         return (
                           <div key={i} className="vrow">
                             <button className="ck" onClick={() => toggleItem(day.d, i)}>{on ? <CheckCircle2 size={17} style={{ color: "var(--green)" }} /> : <Circle size={17} className="dim" />}</button>
-                            <Video size={15} className="cyan" style={{ flexShrink: 0 }} />
+                            {isDoc ? <BookOpen size={15} className="cyan" style={{ flexShrink: 0 }} /> : <Video size={15} className="cyan" style={{ flexShrink: 0 }} />}
                             <span className="vtitle" style={{ textDecoration: on ? "line-through" : "none", color: on ? "var(--faint)" : "inherit" }}>{it.t}{it.dur ? <span className="vdur">{it.dur}</span> : null}</span>
-                            {url ? <a className="watch" href={url} target="_blank" rel="noreferrer"><PlayCircle size={14} /> Watch</a> : <span className="watch off">link not set</span>}
+                            {url ? <a className="watch" href={url} target="_blank" rel="noreferrer">{isDoc ? <><BookOpen size={14} /> Read</> : <><PlayCircle size={14} /> Watch</>}</a> : <span className="watch off">link not set</span>}
                           </div>
                         );
                       }
@@ -480,8 +486,11 @@ function Leaderboard({ users }) {
   const [data, setData] = useState(null);
   useEffect(() => { (async () => {
     const out = { closer: [], setter: [], student: [] };
-    for (const u of users.filter((x) => ["closer", "setter", "student"].includes(x.role) && x.status === "active")) {
-      const reports = (await store.get(K.eod(u.id))) || []; out[u.role].push({ name: u.name, ...aggregate(reports, u.role) });
+    const month = thisMonth();
+    for (const u of users.filter((x) => ["closer", "setter", "student"].includes(x.role) && x.active !== false)) {
+      const all = (await store.get(K.eod(u.id))) || [];
+      const reports = all.filter((r) => (r.date || "").slice(0, 7) === month);
+      out[u.role].push({ name: u.name, ...aggregate(reports, u.role) });
     }
     setData(out);
   })(); }, [users]);
@@ -499,7 +508,7 @@ function Leaderboard({ users }) {
   return (
     <div>
       <h2 className="section">The Leaderboard</h2>
-      <p className="sub">Closers on top, setters next, students below. Put the scoreboard where everyone can see it.</p>
+      <p className="sub">{new Date().toLocaleString("en-US", { month: "long", year: "numeric" })} standings — resets on the 1st. Closers on top, setters next, students below.</p>
       <Board title="Closers" rows={data.closer} sortKey="cash" accent="#22d3ee" cols={[{ key: "showRate", label: "Show %", fmt: (v) => v + "%" }, { key: "closeRate", label: "Close %", fmt: (v) => v + "%" }, { key: "cash", label: "Cash", fmt: fmtMoney }]} />
       <Board title="Setters" rows={data.setter} sortKey="dials" accent="#34d399" cols={[{ key: "dials", label: "# Dials" }, { key: "setRate", label: "Set %", fmt: (v) => v + "%" }, { key: "cashPerSet", label: "Cash/Set", fmt: fmtMoney }]} />
       <Board title="Students" rows={data.student} sortKey="mocks" accent="#7e93a1" cols={[{ key: "mocks", label: "# Mocks" }, { key: "outreach", label: "# Outreach" }, { key: "responseRate", label: "Resp %", fmt: (v) => v + "%" }]} />
@@ -573,7 +582,9 @@ function Opportunities({ me, isCoach }) {
 /* ============================ WINS (with reactions) ============================ */
 function Wins({ me }) {
   const [wins, setWins] = useState([]); const [text, setText] = useState("");
+  const isCoach = me.role === "coach" || me.role === "admin";
   useEffect(() => { (async () => setWins((await store.get(K.wins)) || []))(); }, []);
+  async function remove(winId) { const next = wins.filter((w) => w.id !== winId); setWins(next); await store.set(K.wins, next); }
   async function post() { if (!text.trim()) return; const next = [{ id: uid(), name: me.name, role: me.role, text: text.trim(), date: today(), reactions: {} }, ...wins]; setWins(next); await store.set(K.wins, next); setText(""); }
   async function react(winId, type) {
     const next = wins.map((w) => {
@@ -595,7 +606,7 @@ function Wins({ me }) {
           const r = w.reactions || {};
           return (
             <div key={w.id} className="win">
-              <div className="row-between" style={{ marginBottom: 6 }}><span className="b">{w.name} <span className={`tag ${w.role}`} style={{ marginLeft: 6 }}>{w.role}</span></span><span className="mono" style={{ color: "var(--faint)", fontSize: 12 }}>{w.date}</span></div>
+              <div className="row-between" style={{ marginBottom: 6 }}><span className="b">{w.name} <span className={`tag ${w.role}`} style={{ marginLeft: 6 }}>{w.role}</span></span><span style={{ display: "flex", alignItems: "center", gap: 10 }}><span className="mono" style={{ color: "var(--faint)", fontSize: 12 }}>{w.date}</span>{isCoach && <button className="iconbtn" title="Delete win" onClick={() => remove(w.id)}><Trash2 size={14} /></button>}</span></div>
               <div style={{ marginBottom: 12 }}>{w.text}</div>
               <div className="reactbar">
                 {REACTIONS.map(([type, emoji]) => {
@@ -720,19 +731,24 @@ function Members({ me, users, persistUsers }) {
 
 /* ============================ ROADMAP LINKS ============================ */
 function RoadmapLinks() {
-  const [draft, setDraft] = useState({}); const [ok, setOk] = useState(false);
-  useEffect(() => { (async () => setDraft(((await store.get(K.config)) || {}).links || {}))(); }, []);
-  async function save() { const cfg = (await store.get(K.config)) || {}; await store.set(K.config, { ...cfg, links: draft }); setOk(true); setTimeout(() => setOk(false), 2500); }
+  const [draft, setDraft] = useState({}); const [booking, setBooking] = useState(""); const [ok, setOk] = useState(false);
+  useEffect(() => { (async () => { const cfg = (await store.get(K.config)) || {}; setDraft(cfg.links || {}); setBooking(cfg.bookingUrl || ""); })(); }, []);
+  async function save() { const cfg = (await store.get(K.config)) || {}; await store.set(K.config, { ...cfg, links: draft, bookingUrl: booking.trim() }); setOk(true); setTimeout(() => setOk(false), 2500); }
   return (
     <div>
       <h2 className="section">Roadmap Video Links</h2>
-      <p className="sub">Paste each lesson's URL (Whop, Loom, YouTube, etc.). Students see “Watch” once a link is set. Days can have multiple videos.</p>
+      <p className="sub">Paste each lesson's URL (Whop, Loom, YouTube, Google Doc, etc.). Students see “Watch” (or “Read” for docs) once a link is set. Days can have multiple lessons.</p>
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="links-day-h"><CalendarDays size={14} className="cyan" style={{ verticalAlign: "-2px", marginRight: 6 }} />Day 7 — 1-on-1 booking link</div>
+        <div className="link-row"><span style={{ minWidth: 230, fontSize: 13 }}>Book a call with Coach Josiah</span><input value={booking} placeholder="https://calendly.com/…" onChange={(e) => setBooking(e.target.value)} /></div>
+        <p className="hint" style={{ marginTop: 6 }}>Students see a “Book your 1-on-1 with Coach Josiah” button on Day 7 once this is set.</p>
+      </div>
       <div className="card">
         {ROADMAP.filter((d) => d.videos.length > 0).map((d) => (
           <div key={d.d} className="links-day">
             <div className="links-day-h"><span className="mono cyan b">{String(d.d).padStart(2, "0")}</span> {d.title}</div>
             {d.videos.map((v, i) => (
-              <div key={i} className="link-row"><span style={{ minWidth: 230, fontSize: 13 }}><Video size={13} className="cyan" style={{ verticalAlign: "-2px", marginRight: 6 }} />{v.t}{v.dur ? ` (${v.dur})` : ""}</span><input value={draft[`${d.d}-${i}`] || ""} placeholder="https://…" onChange={(e) => setDraft((p) => ({ ...p, [`${d.d}-${i}`]: e.target.value }))} /></div>
+              <div key={i} className="link-row"><span style={{ minWidth: 230, fontSize: 13 }}>{v.doc ? <BookOpen size={13} className="cyan" style={{ verticalAlign: "-2px", marginRight: 6 }} /> : <Video size={13} className="cyan" style={{ verticalAlign: "-2px", marginRight: 6 }} />}{v.t}{v.dur ? ` (${v.dur})` : ""}{v.doc ? " · doc" : ""}</span><input value={draft[`${d.d}-${i}`] || ""} placeholder="https://…" onChange={(e) => setDraft((p) => ({ ...p, [`${d.d}-${i}`]: e.target.value }))} /></div>
             ))}
           </div>
         ))}
@@ -838,6 +854,7 @@ const STYLE = `
 .ccos .day-title{ font-weight:700; font-size:15px; display:flex; align-items:center; } .ccos .day-focus{ color:var(--dim); font-size:13px; margin-top:2px; }
 .ccos .now{ font-family:'JetBrains Mono',monospace; font-size:9px; font-weight:700; color:var(--bg); background:var(--cyan); padding:2px 6px; border-radius:5px; margin-left:8px; letter-spacing:.1em; }
 .ccos .day-body{ margin-top:12px; padding-top:4px; padding-left:46px; }
+.ccos .book-call{ display:inline-flex; align-items:center; gap:8px; margin-bottom:12px; padding:11px 16px; border-radius:10px; background:linear-gradient(135deg, rgba(34,211,238,.18), rgba(34,211,238,.06)); border:1px solid var(--cyan); color:var(--cyan); font-weight:700; font-size:14px; text-decoration:none; transition:.15s; } .ccos .book-call:hover{ background:rgba(34,211,238,.22); }
 .ccos .task{ display:flex; align-items:center; gap:9px; font-size:14px; padding:6px 0; } .ccos .task.click{ cursor:pointer; } .ccos .task.click:hover span{ color:var(--text); }
 .ccos .vrow{ display:flex; align-items:center; gap:9px; padding:7px 0; font-size:14px; }
 .ccos .ck{ background:none; border:none; padding:0; cursor:pointer; display:grid; place-items:center; }
