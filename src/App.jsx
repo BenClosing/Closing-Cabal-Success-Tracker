@@ -874,8 +874,8 @@ const STYLE = `
 .ccos .react-chip:hover{ border-color:var(--cyan); } .ccos .react-chip.mine{ border-color:var(--cyan); background:rgba(34,211,238,.12); }
 .ccos .react-add{ display:inline-flex; gap:2px; margin-left:auto; opacity:.5; transition:.15s; } .ccos .win:hover .react-add{ opacity:1; }
 .ccos .add-emoji{ background:none; border:none; cursor:pointer; font-size:16px; padding:3px 5px; border-radius:7px; transition:.15s; } .ccos .add-emoji:hover{ background:var(--surface2); transform:scale(1.15); }
-.ccos .opp{ border:1px solid var(--border); border-radius:14px; padding:18px; background:var(--surface); display:flex; flex-direction:column; }
-.ccos .opp-grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.ccos .opp{ border:1px solid var(--border); border-radius:14px; padding:18px; background:var(--surface); display:flex; flex-direction:column; min-width:0; overflow-wrap:anywhere; word-break:break-word; }
+.ccos .opp-grid{ display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:14px; }
 .ccos .opp > .row-between:last-child{ margin-top:auto; }
 @media(max-width:620px){ .ccos .opp-grid{ grid-template-columns:1fr; } }
 .ccos .appcode{ display:flex; align-items:center; gap:10px; padding:9px 12px; margin-bottom:12px; border:1px dashed var(--cyan); border-radius:10px; background:rgba(34,211,238,.06); }
