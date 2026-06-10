@@ -533,74 +533,16 @@ const timeAgo = (ts, dateStr) => {
   const w = Math.floor(d / 7); if (w < 5) return `${w}w ago`;
   return `${Math.floor(d / 30)}mo ago`;
 };
-function Opportunities({ me, isCoach }) {
-  const [opps, setOpps] = useState([]); const [adding, setAdding] = useState(false); const [sort, setSort] = useState("newest");
-  const [applied, setApplied] = useState([]);
-  const [typeFilter, setTypeFilter] = useState("all"); const [nicheFilter, setNicheFilter] = useState("all");
-  const [f, setF] = useState({ type: "closer", ote: "", title: "", desc: "", niche: "", applyUrl: "", dm: "", appCode: "" });
-  useEffect(() => { (async () => {
-    setOpps((await store.get(K.opps)) || []);
-    if (!isCoach) setApplied((await store.get(K.applied(me.id))) || []);
-  })(); }, [me.id, isCoach]);
-  const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
-  async function post() { const next = [{ id: uid(), ...f, by: me.name, date: today(), ts: Date.now() }, ...opps]; setOpps(next); await store.set(K.opps, next); setAdding(false); setF({ type: "closer", ote: "", title: "", desc: "", niche: "", applyUrl: "", dm: "", appCode: "" }); }
-  async function remove(id) { const next = opps.filter((o) => o.id !== id); setOpps(next); await store.set(K.opps, next); }
-  async function toggleApplied(id) {
-    const s = new Set(applied); s.has(id) ? s.delete(id) : s.add(id);
-    const next = [...s]; setApplied(next); await store.set(K.applied(me.id), next);
-  }
-  const isApplied = (id) => applied.includes(id);
-  const niches = useMemo(() => [...new Set(opps.map((o) => (o.niche || "").trim()).filter(Boolean))].sort(), [opps]);
-  const sorted = useMemo(() => {
-    const arr = opps.filter((o) =>
-      (typeFilter === "all" || o.type === typeFilter) &&
-      (nicheFilter === "all" || (o.niche || "").trim() === nicheFilter)
-    );
-    if (sort === "ote") arr.sort((a, b) => parseOte(b.ote) - parseOte(a.ote));
-    else arr.sort((a, b) => (b.ts || 0) - (a.ts || 0) || (b.date || "").localeCompare(a.date || ""));
-    return arr;
-  }, [opps, sort, typeFilter, nicheFilter]);
+function Opportunities() {
+  const url = "https://noreplyjobs.com/signup/closing-cabal";
   return (
-    <div>
-      <div className="row-between"><div><h2 className="section">Opportunities</h2><p className="sub">Open closer & setter seats. Apply directly or DM to get in{!isCoach ? ", then check off the ones you've applied to" : ""}.</p></div>{isCoach && <button className="btn" onClick={() => setAdding(!adding)}><Briefcase size={15} /> Post opportunity</button>}</div>
-      {isCoach && adding && <div className="card">
-        <div className="grid2"><div><label>Type</label><select value={f.type} onChange={set("type")}><option value="closer">Closer</option><option value="setter">Setter</option></select></div><div><label>OTE</label><input value={f.ote} onChange={set("ote")} placeholder="$8k–$15k/mo" /></div></div>
-        <div style={{ marginTop: 12 }}><label>Title / company</label><input value={f.title} onChange={set("title")} placeholder="High-ticket coaching closer — Acme" /></div>
-        <div className="grid2" style={{ marginTop: 12 }}><div><label>Niche</label><input value={f.niche} onChange={set("niche")} placeholder="e.g. Fitness, Coaching, SaaS" /></div><div><label>Application code (optional)</label><input value={f.appCode} onChange={set("appCode")} placeholder="e.g. CABAL25" /></div></div>
-        <div style={{ marginTop: 12 }}><label>Quick description</label><textarea value={f.desc} onChange={set("desc")} /></div>
-        <div className="grid2" style={{ marginTop: 12 }}><div><label>Apply link (optional)</label><input value={f.applyUrl} onChange={set("applyUrl")} placeholder="https://…" /></div><div><label>Or DM to apply (optional)</label><input value={f.dm} onChange={set("dm")} placeholder="@coachjosiah" /></div></div>
-        <button className="btn" style={{ marginTop: 14 }} onClick={post} disabled={!f.title.trim()}>Post</button>
-      </div>}
-      {opps.length === 0 ? <div className="empty">No open opportunities right now.</div> : <>
-        <div className="sortbar"><span className="sortlbl">Filter</span>
-          <button className={`sortpill ${typeFilter === "all" ? "on" : ""}`} onClick={() => setTypeFilter("all")}>All</button>
-          <button className={`sortpill ${typeFilter === "closer" ? "on" : ""}`} onClick={() => setTypeFilter("closer")}>Closer</button>
-          <button className={`sortpill ${typeFilter === "setter" ? "on" : ""}`} onClick={() => setTypeFilter("setter")}>Setter</button>
-          {niches.length > 0 && <select className="nichesel" value={nicheFilter} onChange={(e) => setNicheFilter(e.target.value)}>
-            <option value="all">All niches</option>
-            {niches.map((n) => <option key={n} value={n}>{n}</option>)}
-          </select>}
-        </div>
-        <div className="sortbar"><span className="sortlbl">Sort</span>
-          <button className={`sortpill ${sort === "newest" ? "on" : ""}`} onClick={() => setSort("newest")}>Newest</button>
-          <button className={`sortpill ${sort === "ote" ? "on" : ""}`} onClick={() => setSort("ote")}>Highest OTE</button>
-        </div>
-        {sorted.length === 0 ? <div className="empty">No opportunities match those filters.</div> :
-        <div className="opp-grid">{sorted.map((o) => <div key={o.id} className={`opp ${!isCoach && isApplied(o.id) ? "applied" : ""}`}>
-          <div className="row-between" style={{ alignItems: "flex-start" }}><span style={{ display: "flex", gap: 6, flexWrap: "wrap" }}><span className={`tag ${o.type}`}>{o.type}</span>{o.niche && <span className="niche-tag">{o.niche}</span>}</span><span className="mono green b">{o.ote || "OTE n/a"}</span></div>
-          <div className="disp" style={{ fontSize: 18, margin: "10px 0 4px" }}>{o.title}</div>
-          <div className="dim" style={{ fontSize: 14, marginBottom: 12 }}>{o.desc}</div>
-          {o.appCode && <div className="appcode"><span className="appcode-lbl">Application code</span><span className="mono appcode-val">{o.appCode}</span><button className="iconbtn" title="Copy code" onClick={() => navigator.clipboard?.writeText(o.appCode)}><Copy size={13} /></button></div>}
-          {!isCoach && <button className={`applied-btn ${isApplied(o.id) ? "on" : ""}`} onClick={() => toggleApplied(o.id)}>{isApplied(o.id) ? <><CheckCircle2 size={15} /> Applied</> : <><Circle size={15} /> Mark as applied</>}</button>}
-          <div className="row-between" style={{ marginTop: 10 }}>
-            {o.applyUrl ? <a className="btn ghost sm" href={o.applyUrl} target="_blank" rel="noreferrer"><ExternalLink size={14} /> Apply now</a> : o.dm ? <span className="dim" style={{ fontSize: 13 }}>DM to apply: <b className="cyan">{o.dm}</b></span> : <span className="dim" style={{ fontSize: 13 }}>Ask a coach to apply.</span>}
-            <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span className="posted" title={o.date || ""}>Posted {timeAgo(o.ts, o.date)}</span>
-              {isCoach && <button className="iconbtn" onClick={() => remove(o.id)} title="Remove"><LogOut size={14} /></button>}
-            </span>
-          </div>
-        </div>)}</div>}
-      </>}
+    <div className="embed-wrap">
+      <div className="row-between" style={{ marginBottom: 12 }}>
+        <div><h2 className="section">Opportunities</h2><p className="sub">Browse and apply to open closer & setter roles.</p></div>
+        <a className="btn ghost sm" href={url} target="_blank" rel="noreferrer"><ExternalLink size={14} /> Open full page</a>
+      </div>
+      <iframe className="embed-frame" src={url} title="Opportunities board" loading="lazy"></iframe>
+      <p className="hint" style={{ marginTop: 8 }}>If the board doesn't load above, your browser or the site blocked the embed — use "Open full page" to open it in a new tab.</p>
     </div>
   );
 }
@@ -914,6 +856,7 @@ const STYLE = `
 .ccos .applied-btn.on{ border-color:var(--green); color:var(--green); background:rgba(52,211,153,.08); }
 .ccos .opp.applied{ border-color:rgba(52,211,153,.45); }
 .ccos .nichesel{ margin-left:8px; background:var(--surface); border:1px solid var(--border); color:var(--text); border-radius:999px; padding:6px 12px; font-size:12px; font-family:inherit; cursor:pointer; }
+.ccos .embed-frame{ width:100%; height:calc(100vh - 160px); min-height:560px; border:1px solid var(--border); border-radius:14px; background:var(--surface); display:block; }
 .ccos .sortbar{ display:flex; align-items:center; gap:8px; margin-bottom:14px; }
 .ccos .sortlbl{ font-size:11px; text-transform:uppercase; letter-spacing:.1em; color:var(--dim); font-weight:600; margin-right:2px; }
 .ccos .sortpill{ background:var(--surface); border:1px solid var(--border); color:var(--dim); padding:7px 13px; border-radius:999px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; transition:.15s; }
