@@ -28,10 +28,16 @@ export function AuthGate({ children }) {
   const [session, setSession] = useState(undefined); // undefined = still loading
   const [me, setMe] = useState(null);
   const [notice, setNotice] = useState("");
+  const [recovery, setRecovery] = useState(
+    () => typeof window !== "undefined" && window.location.hash.includes("type=recovery")
+  );
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
+    const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
+      if (event === "PASSWORD_RECOVERY") setRecovery(true);
+      setSession(s);
+    });
     return () => sub.subscription.unsubscribe();
   }, []);
 
@@ -42,10 +48,10 @@ export function AuthGate({ children }) {
       const { data } = await supabase
         .from("approved_members")
         .select("active")
-        .eq("email", (session.user.email || "").toLowerCase())
+        .ilike("email", session.user.email || "")
         .maybeSingle();
       if (data && data.active === false) {
-        setNotice("Your Whop membership is no longer active.");
+        setNotice("Your Whop membership is no longer active. Contact a coach if this is a mistake.");
         await supabase.auth.signOut();
         return;
       }
@@ -61,54 +67,76 @@ export function AuthGate({ children }) {
   }
   function signOut() { supabase.auth.signOut(); }
 
+  if (recovery) return <SetNewPassword onDone={() => setRecovery(false)} />;
   if (session === undefined) return <Center>Loading the Cabal…</Center>;
-  if (!session || !me) return <AuthScreens notice={notice} clearNotice={() => setNotice("")} />;
+  if (!session || !me) return <AuthScreens notice={notice} />;
   return children({ me, updateMe, signOut });
 }
 
-function AuthScreens({ notice, clearNotice }) {
+function AuthScreens({ notice }) {
   const [view, setView] = useState("login"); // login | create | forgot
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
   const [err, setErr] = useState("");
   const [msg, setMsg] = useState(notice || "");
+  const [busy, setBusy] = useState(false);
 
   async function login() {
-    setErr(""); setMsg("");
+    setErr(""); setMsg(""); setBusy(true);
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: pw });
-    if (error) setErr("Wrong email or password — or you haven't created a password yet.");
+    setBusy(false);
+    if (error) setErr("Wrong email or password — or you haven't created a password yet. If you're new, tap 'Create your password' below.");
   }
+
   async function create() {
     setErr(""); setMsg("");
+    const mail = email.trim();
+    if (!mail) return setErr("Enter your email first.");
     if (pw.length < 6) return setErr("Password must be at least 6 characters.");
-    const { error } = await supabase.auth.signUp({ email: email.trim(), password: pw });
+    setBusy(true);
+    // Friendly pre-check: a missing membership shows a clear message instead of a raw database error.
+    const { data: appr, error: aerr } = await supabase
+      .from("approved_members").select("active").ilike("email", mail).maybeSingle();
+    if (aerr) { setBusy(false); return setErr("Couldn't verify your membership right now. Please try again in a moment."); }
+    if (!appr || appr.active === false) {
+      setBusy(false);
+      return setErr("We couldn't find an active membership for that email. Use the EXACT email you purchased with on Whop. Just bought? Give it a minute and try again — or ask a coach to approve you.");
+    }
+    const { error } = await supabase.auth.signUp({ email: mail, password: pw });
+    setBusy(false);
     if (error) {
-      if (String(error.message).includes("NO_ACTIVE_MEMBERSHIP"))
-        setErr("No active Whop membership found for that email. Use the same email you paid with on Whop.");
-      else setErr(error.message);
+      const m = String(error.message).toLowerCase();
+      if (m.includes("already") || m.includes("registered"))
+        setErr("You already have an account with this email — use 'Log in' instead, or reset your password.");
+      else setErr("Couldn't create your account. Please try again, or contact a coach.");
     }
   }
+
   async function forgot() {
     setErr(""); setMsg("");
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim());
+    const mail = email.trim();
+    if (!mail) return setErr("Enter your email first.");
+    setBusy(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(mail, { redirectTo: window.location.origin });
+    setBusy(false);
     if (error) setErr(error.message);
-    else setMsg("If that email has an account, a reset link is on its way.");
+    else setMsg("If that email has an account, a reset link is on its way. Check your spam folder too.");
   }
 
   return (
     <div style={S.wrap}>
       <style>{FONT}</style>
       <div style={S.card}>
-        <div style={S.brand}><div style={S.mark}>C</div><div><div style={S.small}>CLOSING CABAL</div><div style={S.h1}>Sales OS</div></div></div>
+        <div style={S.brand}><div style={S.mark}>C</div><div><div style={S.small}>CLOSING CABAL</div><div style={S.h1}>Success Tracker</div></div></div>
 
         {view === "login" && <>
           <h2 style={S.title}>Log in</h2>
           <p style={S.sub}>Use the email you paid with on Whop.</p>
           <Field label="Email" value={email} onChange={setEmail} />
           <Field label="Password" type="password" value={pw} onChange={setPw} onEnter={login} />
-          <button style={S.btn} onClick={login}>Log in</button>
-          <button style={S.ghost} onClick={() => { setView("create"); setErr(""); setPw(""); }}>First time? Create your password</button>
-          <button style={S.link} onClick={() => { setView("forgot"); setErr(""); }}>Forgot password?</button>
+          <button style={S.btn} onClick={login} disabled={busy}>{busy ? "…" : "Log in"}</button>
+          <button style={S.ghost} onClick={() => { setView("create"); setErr(""); setMsg(""); setPw(""); }}>First time? Create your password</button>
+          <button style={S.link} onClick={() => { setView("forgot"); setErr(""); setMsg(""); }}>Forgot password?</button>
         </>}
 
         {view === "create" && <>
@@ -116,18 +144,50 @@ function AuthScreens({ notice, clearNotice }) {
           <p style={S.sub}>Enter the email you used on Whop and choose a password.</p>
           <Field label="Whop email" value={email} onChange={setEmail} />
           <Field label="New password" type="password" value={pw} onChange={setPw} onEnter={create} />
-          <button style={S.btn} onClick={create}>Create account & enter</button>
-          <button style={S.ghost} onClick={() => { setView("login"); setErr(""); setPw(""); }}>Back to log in</button>
+          <button style={S.btn} onClick={create} disabled={busy}>{busy ? "…" : "Create account & enter"}</button>
+          <button style={S.ghost} onClick={() => { setView("login"); setErr(""); setMsg(""); setPw(""); }}>Back to log in</button>
         </>}
 
         {view === "forgot" && <>
           <h2 style={S.title}>Reset password</h2>
-          <p style={S.sub}>We'll email you a reset link.</p>
-          <Field label="Email" value={email} onChange={setEmail} />
-          <button style={S.btn} onClick={forgot}>Send reset link</button>
-          <button style={S.ghost} onClick={() => { setView("login"); setErr(""); }}>Back to log in</button>
+          <p style={S.sub}>We'll email you a link to set a new password.</p>
+          <Field label="Email" value={email} onChange={setEmail} onEnter={forgot} />
+          <button style={S.btn} onClick={forgot} disabled={busy}>{busy ? "…" : "Send reset link"}</button>
+          <button style={S.ghost} onClick={() => { setView("login"); setErr(""); setMsg(""); }}>Back to log in</button>
         </>}
 
+        {err && <p style={S.err}>{err}</p>}
+        {msg && <p style={S.ok}>{msg}</p>}
+      </div>
+    </div>
+  );
+}
+
+function SetNewPassword({ onDone }) {
+  const [pw, setPw] = useState(""); const [pw2, setPw2] = useState("");
+  const [err, setErr] = useState(""); const [msg, setMsg] = useState(""); const [busy, setBusy] = useState(false);
+  async function save() {
+    setErr(""); setMsg("");
+    if (pw.length < 6) return setErr("Password must be at least 6 characters.");
+    if (pw !== pw2) return setErr("The two passwords don't match.");
+    setBusy(true);
+    const { error } = await supabase.auth.updateUser({ password: pw });
+    setBusy(false);
+    if (error) return setErr(error.message);
+    setMsg("Password updated — logging you in…");
+    window.history.replaceState({}, "", window.location.pathname);
+    setTimeout(onDone, 900);
+  }
+  return (
+    <div style={S.wrap}>
+      <style>{FONT}</style>
+      <div style={S.card}>
+        <div style={S.brand}><div style={S.mark}>C</div><div><div style={S.small}>CLOSING CABAL</div><div style={S.h1}>Success Tracker</div></div></div>
+        <h2 style={S.title}>Set a new password</h2>
+        <p style={S.sub}>Choose a new password for your account.</p>
+        <Field label="New password" type="password" value={pw} onChange={setPw} />
+        <Field label="Confirm password" type="password" value={pw2} onChange={setPw2} onEnter={save} />
+        <button style={S.btn} onClick={save} disabled={busy}>{busy ? "…" : "Save new password"}</button>
         {err && <p style={S.err}>{err}</p>}
         {msg && <p style={S.ok}>{msg}</p>}
       </div>

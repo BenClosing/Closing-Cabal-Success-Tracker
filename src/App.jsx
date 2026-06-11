@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell } from "recharts";
 import { db as store } from "./lib/db";
+import { supabase } from "./lib/supabase";
 
 /* ============================ STORAGE (Supabase-backed; mirrors the prototype's key-value API) ============================ */
 const K = {
@@ -666,31 +667,29 @@ function Dashboard({ users }) {
 }
 
 /* ============================ MEMBERS ============================ */
-function Members({ me, users, persistUsers }) {
-  const isAdmin = me.role === "admin";
-  const [f, setF] = useState({ name: "", email: "", role: "student" }); const [out, setOut] = useState(null);
-  const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
-  async function invite() {
-    if (!f.name.trim() || !f.email.trim()) return;
-    if (users.some((u) => u.email.toLowerCase() === f.email.trim().toLowerCase())) { alert("That email is already in the system."); return; }
-    const code = code6();
-    const u = { id: uid(), name: f.name.trim(), email: f.email.trim(), role: f.role, position: f.role, goal: "", onboarded: false, status: "invited", inviteCode: code, passwordHash: null, createdAt: today() };
-    await persistUsers([...users, u]); await store.set(K.roadmap(u.id), { checked: {} }); setOut({ email: u.email, code }); setF({ name: "", email: "", role: "student" });
+function Members({ me, users }) {
+  const [mail, setMail] = useState(""); const [out, setOut] = useState(null); const [busy, setBusy] = useState(false);
+  async function approve() {
+    const e = mail.trim().toLowerCase();
+    if (!e || !e.includes("@")) { setOut({ ok: false, msg: "Enter a valid email." }); return; }
+    setBusy(true);
+    const { error } = await supabase.from("approved_members").upsert({ email: e, active: true, updated_at: new Date().toISOString() });
+    setBusy(false);
+    if (error) setOut({ ok: false, msg: "Couldn't approve — " + error.message });
+    else { setOut({ ok: true, msg: `${e} is approved. They can now go to the login screen and tap "Create your password."` }); setMail(""); }
   }
-  async function resetPw(u) { const code = code6(); await persistUsers(users.map((x) => x.id === u.id ? { ...x, passwordHash: null, status: "invited", inviteCode: code } : x)); setOut({ email: u.email, code, reset: true }); }
-  const roleOptions = isAdmin ? ["student", "setter", "closer", "coach", "admin"] : ["student", "setter", "closer"];
   return (
     <div>
       <h2 className="section">Members</h2>
-      <p className="sub">Invite by email. They join with the access code and set their own password. {isAdmin ? "As Admin you can also assign coach/admin." : "Only Admins can create coaches/admins."}</p>
-      <div className="card"><h3 className="disp h3">Invite someone</h3>
-        <div className="grid3"><div><label>Name</label><input value={f.name} onChange={set("name")} /></div><div><label>Email</label><input value={f.email} onChange={set("email")} /></div><div><label>Role</label><select value={f.role} onChange={set("role")}>{roleOptions.map((r) => <option key={r} value={r}>{r}</option>)}</select></div></div>
-        <button className="btn" style={{ marginTop: 14 }} onClick={invite}><Mail size={15} /> Generate invite</button>
-        {out && <div className="invite-out"><div className="hint" style={{ marginBottom: 4 }}>{out.reset ? "Password reset" : "Invite"} ready for <b style={{ color: "var(--text)" }}>{out.email}</b></div><div className="row-between"><span>Access code: <span className="mono cyan b" style={{ fontSize: 16 }}>{out.code}</span></span><button className="iconbtn" onClick={() => navigator.clipboard?.writeText(out.code)}><Copy size={14} /></button></div><p className="hint" style={{ marginTop: 6 }}>In production this auto-emails them. For now, send them the code + email and have them use “Join with access code.”</p></div>}
+      <p className="sub">If Whop missed someone, approve their email here so they can log in. This is the same list Whop purchases add to automatically.</p>
+      <div className="card"><h3 className="disp h3">Approve a member</h3>
+        <p className="hint" style={{ marginBottom: 10 }}>Use the exact email they purchased with on Whop. After approving, they tap “Create your password” on the login screen.</p>
+        <div className="grid2"><div><label>Email</label><input value={mail} placeholder="member@email.com" onChange={(e) => setMail(e.target.value)} onKeyDown={(e) => e.key === "Enter" && approve()} /></div><div style={{ display: "flex", alignItems: "flex-end" }}><button className="btn" onClick={approve} disabled={busy} style={{ width: "100%" }}><CheckCircle2 size={15} /> {busy ? "Approving…" : "Approve member"}</button></div></div>
+        {out && <p style={{ marginTop: 10, fontSize: 13, color: out.ok ? "var(--green)" : "var(--red)" }}>{out.msg}</p>}
       </div>
       <div className="card"><h3 className="disp h3">Roster</h3>
-        <table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody>
-          {users.map((u) => <tr key={u.id}><td className="b">{u.name}</td><td className="mono dim" style={{ fontSize: 12 }}>{u.email}</td><td><span className={`tag ${u.role}`}>{u.role}</span></td><td>{u.status === "active" ? <span className="green">active</span> : <span className="cyan">invited{u.inviteCode ? ` · ${u.inviteCode}` : ""}</span>}</td><td style={{ textAlign: "right" }}>{u.id !== me.id && <button className="btn ghost sm" onClick={() => resetPw(u)}><KeyRound size={13} /> Reset password</button>}</td></tr>)}
+        <table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Joined</th></tr></thead><tbody>
+          {users.map((u) => <tr key={u.id}><td className="b">{u.name}</td><td className="mono dim" style={{ fontSize: 12 }}>{u.email}</td><td><span className={`tag ${u.role}`}>{u.role}</span></td><td className="dim" style={{ fontSize: 12 }}>{u.joinDate || u.createdAt || "—"}</td></tr>)}
         </tbody></table>
       </div>
     </div>
