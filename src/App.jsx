@@ -15,6 +15,7 @@ const K = {
   roadmap: (id) => `cc3:roadmap:${id}`,
   eod: (id) => `cc3:eod:${id}`,
   applied: (id) => `cc3:applied:${id}`,
+  intake: (id) => `cc3:intake:${id}`,
   opps: "cc3:opps",
   wins: "cc3:wins",
   config: "cc3:config",
@@ -85,11 +86,11 @@ export default function App({ me, updateMe, signOut }) {
 
   async function persistUsers(next) { setUsers(next); await store.set(K.users, next); }
 
-  if (!isCoach(me.role) && !me.onboarded) return <Shell><Onboarding me={me} onDone={(patch) => updateMe(patch)} /></Shell>;
+  if (!isCoach(me.role) && !me.intakeDone) return <Shell><Intake me={me} onDone={(patch) => updateMe(patch)} /></Shell>;
   if (tab === null) return <Shell><div className="center"><span className="cyan">Loading…</span></div></Shell>;
 
   const tabs = isCoach(me.role)
-    ? [["dashboard", "Dashboard", LayoutDashboard], ["members", "Members", Users], ["schedule", "Call Schedule", CalendarDays], ["opps", "Opportunities", Briefcase], ["leaderboard", "Leaderboard", Trophy], ["wins", "Wins", PartyPopper], ["links", "Roadmap Links", Link2], ["settings", "Settings", Cog]]
+    ? [["dashboard", "Dashboard", LayoutDashboard], ["members", "Members", Users], ["intake", "Intake Forms", ClipboardList], ["schedule", "Call Schedule", CalendarDays], ["opps", "Opportunities", Briefcase], ["leaderboard", "Leaderboard", Trophy], ["wins", "Wins", PartyPopper], ["links", "Roadmap Links", Link2], ["settings", "Settings", Cog]]
     : [["roadmap", "30-Day Roadmap", Target], ["eod", "EOD Report", ClipboardList], ["stats", "My Stats", TrendingUp], ["schedule", "Call Schedule", CalendarDays], ["leaderboard", "Leaderboard", Trophy], ["opps", "Opportunities", Briefcase], ["wins", "Wins", PartyPopper], ["settings", "Settings", Cog]];
 
   return (
@@ -128,6 +129,7 @@ export default function App({ me, updateMe, signOut }) {
           {tab === "wins" && <Wins me={me} />}
           {tab === "dashboard" && <Dashboard users={users} />}
           {tab === "members" && <Members me={me} users={users} persistUsers={persistUsers} />}
+          {tab === "intake" && <IntakeView users={users} />}
           {tab === "links" && <RoadmapLinks />}
           {tab === "settings" && <SettingsView me={me} isCoach={isCoach(me.role)} updateMe={updateMe} />}
         </main>
@@ -139,27 +141,89 @@ export default function App({ me, updateMe, signOut }) {
 function Shell({ children }) { return <div className="ccos"><style>{STYLE}</style><div className="wrap">{children}</div></div>; }
 
 /* ============================ ONBOARDING ============================ */
-function Onboarding({ me, onDone }) {
-  const [position, setPosition] = useState(["student", "setter", "closer"].includes(me.role) ? me.role : "student");
-  const [goal, setGoal] = useState("");
-  const opts = [["student", "Student", "Learning the craft, building toward an offer."], ["setter", "Setter", "Booking qualified calls."], ["closer", "Closer", "Taking calls, collecting cash."]];
+const INTAKE_QS = [
+  ["loc", "Where are you located?"],
+  ["content", "What piece of my content made you decide to join the Closing Cabal?"],
+  ["why", "Why did you choose to work with me over someone else? What set me apart?"],
+  ["push", "What was the final thing that pushed you over the edge to invest in yourself?"],
+  ["problems", "What are the top 3 problems you want solved in the next 90 days?"],
+  ["income", "What is your realistic 90-day income goal through HTS?"],
+  ["satisfy", "What is the #1 thing you want to achieve right now that would make you 100% satisfied with your investment?"],
+  ["fears", "What are your biggest fears or doubts about hitting your goals?"],
+  ["forward", "What are you most looking forward to inside the Closing Cabal?"],
+];
+
+function Intake({ me, onDone }) {
+  const [step, setStep] = useState(0);
+  const [ans, setAns] = useState({});
+  const [busy, setBusy] = useState(false);
+  const total = INTAKE_QS.length;
+  const [qid, q] = INTAKE_QS[step];
+  const val = ans[qid] || "";
+  const canNext = val.trim().length > 0;
+  const setVal = (v) => setAns((a) => ({ ...a, [qid]: v }));
+  function next() { if (canNext && step < total - 1) setStep(step + 1); }
+  function back() { if (step > 0) setStep(step - 1); }
+  async function submit() {
+    if (!canNext) return;
+    setBusy(true);
+    const record = { userId: me.id, name: me.name, email: me.email, role: me.role, answers: ans, submittedAt: new Date().toISOString() };
+    await store.set(K.intake(me.id), record);
+    await onDone({ intakeDone: true, onboarded: true, goal: ans.income || "" });
+  }
   return (
     <div className="center">
-      <div className="auth">
-        <div className="brand" style={{ justifyContent: "center", marginBottom: 22 }}><div className="mark">C</div><div><small>Closing Cabal</small><h1>Sales OS</h1></div></div>
+      <div className="auth" style={{ maxWidth: 580 }}>
+        <div className="brand" style={{ justifyContent: "center", marginBottom: 18 }}><div className="mark">C</div><div><small>Closing Cabal</small><h1>Success Tracker</h1></div></div>
         <div className="card glow">
-          <h2 className="section" style={{ fontSize: 22 }}>Welcome, {me.name.split(" ")[0]}</h2>
-          <p className="sub">Two quick things before you start.</p>
-          <label>Where are you right now?</label>
-          <div className="role-grid">
-            {opts.map(([id, t, d]) => <div key={id} className={`role-opt ${position === id ? "sel" : ""}`} onClick={() => setPosition(id)}><div className="rt">{t}</div><div className="rd">{d}</div></div>)}
+          <div className="intake-top">
+            <span className="intake-count">Question {step + 1} of {total}</span>
+            <div className="intake-bar"><span style={{ width: `${((step + 1) / total) * 100}%` }} /></div>
           </div>
-          <p className="hint" style={{ marginTop: 6 }}>You can change this in Settings as you progress.</p>
-          <label style={{ marginTop: 18 }}>What's the biggest goal you want to achieve?</label>
-          <input value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="e.g. Land a closer seat and hit $10k/mo by August" />
-          <button className="btn full" style={{ marginTop: 18 }} disabled={!goal.trim()} onClick={() => onDone({ role: position, position, goal: goal.trim(), onboarded: true })}>Enter the OS</button>
+          <p className="intake-note"><i>Make sure to take your time and respond to each question in depth. This allows us to understand your situation and be able to give you the guidance needed to succeed.</i></p>
+          <label className="intake-q">{q}</label>
+          <textarea className="intake-input" value={val} onChange={(e) => setVal(e.target.value)} placeholder="Type your answer…" rows={5} />
+          <div className="intake-actions">
+            {step > 0 ? <button className="btn ghost" onClick={back}><ChevronRight size={15} style={{ transform: "rotate(180deg)" }} /> Back</button> : <span />}
+            {step < total - 1
+              ? <button className="btn" disabled={!canNext} onClick={next}>Next <ChevronRight size={15} /></button>
+              : <button className="btn" disabled={!canNext || busy} onClick={submit}>{busy ? "Submitting…" : "Submit & enter"}</button>}
+          </div>
         </div>
+        <p className="hint" style={{ textAlign: "center", marginTop: 12 }}>All questions are required. Your answers are shared only with your coaches.</p>
       </div>
+    </div>
+  );
+}
+
+function IntakeView({ users }) {
+  const [data, setData] = useState(null);
+  const [openId, setOpenId] = useState(null);
+  useEffect(() => { (async () => {
+    const students = users.filter((u) => ["student", "setter", "closer"].includes(u.role) && u.active !== false);
+    const out = await Promise.all(students.map(async (u) => ({ user: u, rec: await store.get(K.intake(u.id)) })));
+    setData(out);
+  })(); }, [users]);
+  if (!data) return <div className="empty">Loading…</div>;
+  const done = data.filter((d) => d.rec);
+  const pending = data.filter((d) => !d.rec);
+  return (
+    <div>
+      <h2 className="section">Intake Forms</h2>
+      <p className="sub">New-student intake answers. {done.length} completed{pending.length ? ` · ${pending.length} not yet submitted` : ""}.</p>
+      {done.length === 0 && <div className="empty">No intake forms submitted yet.</div>}
+      {done.map(({ user, rec }) => (
+        <div key={user.id} className="card intake-card">
+          <div className="row-between intake-head" onClick={() => setOpenId(openId === user.id ? null : user.id)}>
+            <div><span className="b">{user.name}</span> <span className={`tag ${user.role}`} style={{ marginLeft: 6 }}>{user.role}</span><div className="mono dim" style={{ fontSize: 12 }}>{user.email}</div></div>
+            <span style={{ display: "flex", alignItems: "center", gap: 10 }}><span className="dim" style={{ fontSize: 12 }}>{(rec.submittedAt || "").slice(0, 10)}</span><ChevronDown size={16} className="dim" style={{ transform: openId === user.id ? "rotate(180deg)" : "none" }} /></span>
+          </div>
+          {openId === user.id && <div className="intake-answers">
+            {INTAKE_QS.map(([id2, question]) => <div key={id2} className="intake-a"><div className="intake-a-q">{question}</div><div className="intake-a-v">{rec.answers?.[id2] || <span className="dim">—</span>}</div></div>)}
+          </div>}
+        </div>
+      ))}
+      {pending.length > 0 && <div className="card"><h3 className="disp h3">Not yet submitted</h3>{pending.map(({ user }) => <div key={user.id} className="row-between" style={{ padding: "6px 0" }}><span>{user.name} <span className="dim mono" style={{ fontSize: 12 }}>{user.email}</span></span><span className="tag" style={{ opacity: .6 }}>pending</span></div>)}</div>}
     </div>
   );
 }
@@ -542,6 +606,7 @@ function Opportunities() {
         <div><h2 className="section">Opportunities</h2><p className="sub">Browse and apply to open closer & setter roles.</p></div>
         <a className="btn ghost sm" href={url} target="_blank" rel="noreferrer"><ExternalLink size={14} /> Open full page</a>
       </div>
+      <div className="jobs-note">If this is your first time logging in to the job board, click <b>SIGN-UP</b> and wait for approval!</div>
       <iframe className="embed-frame" src={url} title="Opportunities board" loading="lazy"></iframe>
       <p className="hint" style={{ marginTop: 8 }}>If the board doesn't load above, your browser or the site blocked the embed — use "Open full page" to open it in a new tab.</p>
     </div>
@@ -855,7 +920,26 @@ const STYLE = `
 .ccos .applied-btn.on{ border-color:var(--green); color:var(--green); background:rgba(52,211,153,.08); }
 .ccos .opp.applied{ border-color:rgba(52,211,153,.45); }
 .ccos .nichesel{ margin-left:8px; background:var(--surface); border:1px solid var(--border); color:var(--text); border-radius:999px; padding:6px 12px; font-size:12px; font-family:inherit; cursor:pointer; }
-.ccos .embed-frame{ width:100%; height:calc(100vh - 160px); min-height:560px; border:1px solid var(--border); border-radius:14px; background:var(--surface); display:block; }
+.ccos .embed-frame{ width:100%; height:calc(100vh - 190px); min-height:540px; border:1px solid var(--border); border-radius:14px; background:var(--surface); display:block; }
+.ccos .jobs-note{ background:linear-gradient(135deg, rgba(34,211,238,.16), rgba(34,211,238,.05)); border:1px solid var(--cyan); color:var(--cyan2); border-radius:12px; padding:12px 16px; margin-bottom:12px; font-size:14px; font-weight:600; }
+.ccos .jobs-note b{ color:var(--cyan); letter-spacing:.03em; }
+.ccos .intake-top{ display:flex; align-items:center; gap:12px; margin-bottom:14px; }
+.ccos .intake-count{ font-size:11px; text-transform:uppercase; letter-spacing:.1em; color:var(--cyan); font-weight:700; white-space:nowrap; }
+.ccos .intake-bar{ flex:1; height:6px; background:var(--surface2); border-radius:999px; overflow:hidden; }
+.ccos .intake-bar span{ display:block; height:100%; background:var(--cyan); border-radius:999px; transition:width .25s; }
+.ccos .intake-note{ font-size:13px; color:var(--dim); margin:0 0 18px; line-height:1.5; }
+.ccos .intake-q{ display:block; font-family:'Sora',sans-serif; font-size:19px; font-weight:600; color:var(--text); margin-bottom:12px; line-height:1.35; }
+.ccos .intake-input{ width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:12px; padding:13px 14px; font-family:inherit; font-size:15px; outline:none; box-sizing:border-box; resize:vertical; }
+.ccos .intake-input:focus{ border-color:var(--cyan); }
+.ccos .intake-actions{ display:flex; justify-content:space-between; align-items:center; gap:12px; margin-top:18px; }
+.ccos .intake-card{ padding:0; overflow:hidden; }
+.ccos .intake-head{ padding:16px 18px; cursor:pointer; }
+.ccos .intake-head:hover{ background:var(--surface2); }
+.ccos .intake-answers{ border-top:1px solid var(--border); padding:6px 18px 14px; }
+.ccos .intake-a{ padding:12px 0; border-bottom:1px solid var(--border); }
+.ccos .intake-a:last-child{ border-bottom:none; }
+.ccos .intake-a-q{ font-size:13px; font-weight:700; color:var(--cyan); margin-bottom:5px; }
+.ccos .intake-a-v{ font-size:14px; color:var(--text); white-space:pre-wrap; line-height:1.5; }
 .ccos .sortbar{ display:flex; align-items:center; gap:8px; margin-bottom:14px; }
 .ccos .sortlbl{ font-size:11px; text-transform:uppercase; letter-spacing:.1em; color:var(--dim); font-weight:600; margin-right:2px; }
 .ccos .sortpill{ background:var(--surface); border:1px solid var(--border); color:var(--dim); padding:7px 13px; border-radius:999px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; transition:.15s; }

@@ -13,9 +13,10 @@ async function loadProfile(user) {
       id: user.id,
       email: user.email,
       name: (user.email || "").split("@")[0],
-      role: "student",
+      role: user.user_metadata?.role || "student",
       goal: "",
       onboarded: false,
+      intakeDone: false,
       active: true,
       joinDate: today(),
     };
@@ -77,6 +78,7 @@ function AuthScreens({ notice }) {
   const [view, setView] = useState("login"); // login | create | forgot
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
+  const [role, setRole] = useState("student");
   const [err, setErr] = useState("");
   const [msg, setMsg] = useState(notice || "");
   const [busy, setBusy] = useState(false);
@@ -102,7 +104,7 @@ function AuthScreens({ notice }) {
       setBusy(false);
       return setErr("We couldn't find an active membership for that email. Use the EXACT email you purchased with on Whop. Just bought? Give it a minute and try again — or ask a coach to approve you.");
     }
-    const { error } = await supabase.auth.signUp({ email: mail, password: pw });
+    const { error } = await supabase.auth.signUp({ email: mail, password: pw, options: { data: { role } } });
     setBusy(false);
     if (error) {
       const m = String(error.message).toLowerCase();
@@ -140,11 +142,19 @@ function AuthScreens({ notice }) {
         </>}
 
         {view === "create" && <>
-          <h2 style={S.title}>Create your password</h2>
-          <p style={S.sub}>Enter the email you used on Whop and choose a password.</p>
+          <h2 style={S.title}>Create your account</h2>
+          <p style={S.sub}>Set up your login, then you'll complete a short intake so your coaches can help you.</p>
           <Field label="Whop email" value={email} onChange={setEmail} />
           <Field label="New password" type="password" value={pw} onChange={setPw} onEnter={create} />
-          <button style={S.btn} onClick={create} disabled={busy}>{busy ? "…" : "Create account & enter"}</button>
+          <div style={{ marginBottom: 12 }}>
+            <div style={S.label}>Your position</div>
+            <select style={S.input} value={role} onChange={(e) => setRole(e.target.value)}>
+              <option value="student">Student</option>
+              <option value="setter">Setter</option>
+              <option value="closer">Closer</option>
+            </select>
+          </div>
+          <button style={S.btn} onClick={create} disabled={busy}>{busy ? "…" : "Create account & continue"}</button>
           <button style={S.ghost} onClick={() => { setView("login"); setErr(""); setMsg(""); setPw(""); }}>Back to log in</button>
         </>}
 
