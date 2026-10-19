@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react";
 import { supabase } from "./lib/supabase";
-import { db } from "./lib/db";
+import { db, profiles } from "./lib/db";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-// Find or create this user's profile row inside the shared `users` list in kv.
+// Only accounts created on/after this date must complete the intake form.
+// Anyone who signed up before this is treated as an existing student and skips it.
+const INTAKE_CUTOFF = new Date("2026-07-03T00:00:00Z");
+
 async function loadProfile(user) {
-  const users = (await db.get("users")) || [];
-  let p = users.find((u) => u.id === user.id);
+  const preExisting = user.created_at ? new Date(user.created_at) < INTAKE_CUTOFF : false;
+  let p = await profiles.get(user.id);
   if (!p) {
     p = {
       id: user.id,
@@ -16,11 +19,17 @@ async function loadProfile(user) {
       role: user.user_metadata?.role || "student",
       goal: "",
       onboarded: false,
-      intakeDone: false,
+      intakeDone: preExisting,
       active: true,
       joinDate: today(),
     };
-    await db.set("users", [...users, p]);
+    await profiles.save(p);
+  } else {
+    let changed = false; const np = { ...p };
+    if (preExisting && !p.intakeDone) { np.intakeDone = true; changed = true; }
+    const mr = user.user_metadata?.role;
+    if ((mr === "admin" || mr === "coach") && p.role !== mr) { np.role = mr; changed = true; }
+    if (changed) { p = np; await profiles.save(np); }
   }
   return p;
 }
@@ -61,10 +70,9 @@ export function AuthGate({ children }) {
   }, [session]);
 
   async function updateMe(patch) {
-    const users = (await db.get("users")) || [];
-    const next = users.map((u) => (u.id === me.id ? { ...u, ...patch } : u));
-    await db.set("users", next);
-    setMe((m) => ({ ...m, ...patch }));
+    const np = { ...me, ...patch };
+    await profiles.save(np);
+    setMe(np);
   }
   function signOut() { supabase.auth.signOut(); }
 

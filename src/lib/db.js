@@ -22,3 +22,25 @@ export const db = {
     return data.map((r) => r.key);
   },
 };
+
+// Per-user profile rows. Each user lives in its OWN kv row ("user:<id>"), so a
+// write for one user never overwrites another — this is what fixes the vanishing
+// students / flapping admin caused by the old single "users" array.
+const PKEY = (id) => `user:${id}`;
+export const profiles = {
+  async get(id) {
+    const { data, error } = await supabase.from("kv").select("value").eq("key", PKEY(id)).maybeSingle();
+    if (error || !data) return null;
+    return data.value;
+  },
+  async save(p) {
+    const { error } = await supabase.from("kv").upsert({ key: PKEY(p.id), value: p, updated_at: new Date().toISOString() });
+    if (error) console.error("profiles.save", error);
+    return !error;
+  },
+  async all() {
+    const { data, error } = await supabase.from("kv").select("value").like("key", "user:%");
+    if (error || !data) return [];
+    return data.map((r) => r.value).filter(Boolean);
+  },
+};

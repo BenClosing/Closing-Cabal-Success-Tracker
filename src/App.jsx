@@ -6,7 +6,7 @@ import {
   PlayCircle, ChevronDown, ChevronRight, Video, MessageSquare, Menu, X, BookOpen, Trash2
 } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell } from "recharts";
-import { db as store } from "./lib/db";
+import { db as store, profiles } from "./lib/db";
 import { supabase } from "./lib/supabase";
 
 /* ============================ STORAGE (Supabase-backed; mirrors the prototype's key-value API) ============================ */
@@ -41,7 +41,7 @@ const ROADMAP = [
   { d: 4, phase: "Foundations & Outreach", title: "The DM", focus: "Open conversations that actually get replies.", videos: [V("How to Send a DM With or Without Experience", "", true), V("What to Look For in an Offer", "3:57")], actions: ["Send 15 outreach DMs", "Run 1 mock call", "Post your numbers in #accountability", "Comment on 3 posts in the community"] },
   { d: 5, phase: "Foundations & Outreach", title: "Build Your Presence", focus: "Make inbound easier while you push outbound.", videos: [V("How to Make Your FYP Perfect for Mass Outreach", "9:20")], actions: ["Send 15 outreach DMs", "Post or engage on content to warm your FYP", "Run 1 mock call", "Post your daily update in #accountability"] },
   { d: 6, phase: "Foundations & Outreach", title: "Mindset To Sustain It", focus: "Outreach is a grind — build the mind for it.", videos: [V("You NEED This Mindset for Sales", "26:50")], actions: ["Send 15 outreach DMs", "Join the live coaching call", "Run 1 mock call", "Post in #accountability"] },
-  { d: 7, phase: "Core Sales Skill", title: "1-on-1 With Coach Josiah", focus: "Your first personal checkpoint.", videos: [V("Blueprint to Key Sales Process", "20:32")], actions: ["Book & complete your 1-on-1 with Coach Josiah", "Send 15 outreach DMs", "Post your biggest takeaway in #accountability"] },
+  { d: 7, phase: "Core Sales Skill", title: "1-on-1 With Coach Ryan", focus: "Your first personal checkpoint.", videos: [V("Blueprint to Key Sales Process", "20:32")], actions: ["Book & complete your 1-on-1 with Coach Ryan", "Send 15 outreach DMs", "Post your biggest takeaway in #accountability"] },
   { d: 8, phase: "Core Sales Skill", title: "The Call Framework", focus: "The map of a winning call.", videos: [V("Sales Call Framework", "13:46"), V("Using Tone of Voice", "6:22")], actions: ["Send 20 outreach DMs", "Run 2 mock calls", "Join the live coaching call", "Post in #accountability"] },
   { d: 9, phase: "Core Sales Skill", title: "Drive To Keep Pushing", focus: "Protect your standard while volume climbs.", videos: [V("Thinking Patterns to Get Rich", "14:19"), V("You NEED to Have an Ego in Sales", "19:50")], actions: ["Send 20 outreach DMs", "Run 2 mock calls", "Post in #accountability", "Engage on 3 posts in Discord"] },
   { d: 10, phase: "Core Sales Skill", title: "The Sales Gap", focus: "Create the gap, then close it.", videos: [V("THE SALES GAP", "9:38"), V("The 'Why' Sales Technique", "12:38")], actions: ["Send 20 outreach DMs", "Run 2 mock calls", "Join the live coaching call", "Post in #accountability"] },
@@ -79,12 +79,12 @@ export default function App({ me, updateMe, signOut }) {
 
   const isCoach = (r) => r === "coach" || r === "admin";
   const homeTab = (r) => isCoach(r) ? "dashboard" : "roadmap";
-  const refreshUsers = async () => { const u = (await store.get(K.users)) || []; setUsers(u); return u; };
+  const refreshUsers = async () => { const u = await profiles.all(); setUsers(u); return u; };
 
   useEffect(() => { refreshUsers(); }, []);
   useEffect(() => { if (tab === null && me) setTab(homeTab(me.role)); }, [me, tab]);
 
-  async function persistUsers(next) { setUsers(next); await store.set(K.users, next); }
+  async function persistUsers(next) { setUsers(next); await Promise.all(next.map((u) => profiles.save(u))); }
 
   if (!isCoach(me.role) && !me.intakeDone) return <Shell><Intake me={me} onDone={(patch) => updateMe(patch)} /></Shell>;
   if (tab === null) return <Shell><div className="center"><span className="cyan">Loading…</span></div></Shell>;
@@ -197,33 +197,34 @@ function Intake({ me, onDone }) {
 }
 
 function IntakeView({ users }) {
-  const [data, setData] = useState(null);
+  const [recs, setRecs] = useState(null);
   const [openId, setOpenId] = useState(null);
   useEffect(() => { (async () => {
-    const students = users.filter((u) => ["student", "setter", "closer"].includes(u.role) && u.active !== false);
-    const out = await Promise.all(students.map(async (u) => ({ user: u, rec: await store.get(K.intake(u.id)) })));
-    setData(out);
-  })(); }, [users]);
-  if (!data) return <div className="empty">Loading…</div>;
-  const done = data.filter((d) => d.rec);
-  const pending = data.filter((d) => !d.rec);
+    const keys = await store.list("cc3:intake:");
+    const loaded = await Promise.all(keys.map((k) => store.get(k)));
+    const clean = loaded.filter(Boolean).sort((a, b) => (b.submittedAt || "").localeCompare(a.submittedAt || ""));
+    setRecs(clean);
+  })(); }, []);
+  if (!recs) return <div className="empty">Loading…</div>;
+  const submittedIds = new Set(recs.map((r) => r.userId));
+  const pending = (users || []).filter((u) => ["student", "setter", "closer"].includes(u.role) && u.active !== false && !submittedIds.has(u.id));
   return (
     <div>
       <h2 className="section">Intake Forms</h2>
-      <p className="sub">New-student intake answers. {done.length} completed{pending.length ? ` · ${pending.length} not yet submitted` : ""}.</p>
-      {done.length === 0 && <div className="empty">No intake forms submitted yet.</div>}
-      {done.map(({ user, rec }) => (
-        <div key={user.id} className="card intake-card">
-          <div className="row-between intake-head" onClick={() => setOpenId(openId === user.id ? null : user.id)}>
-            <div><span className="b">{user.name}</span> <span className={`tag ${user.role}`} style={{ marginLeft: 6 }}>{user.role}</span><div className="mono dim" style={{ fontSize: 12 }}>{user.email}</div></div>
-            <span style={{ display: "flex", alignItems: "center", gap: 10 }}><span className="dim" style={{ fontSize: 12 }}>{(rec.submittedAt || "").slice(0, 10)}</span><ChevronDown size={16} className="dim" style={{ transform: openId === user.id ? "rotate(180deg)" : "none" }} /></span>
+      <p className="sub">New-student intake answers. {recs.length} submitted{pending.length ? ` · ${pending.length} not yet submitted` : ""}.</p>
+      {recs.length === 0 && <div className="empty">No intake forms submitted yet.</div>}
+      {recs.map((rec) => (
+        <div key={rec.userId} className="card intake-card">
+          <div className="row-between intake-head" onClick={() => setOpenId(openId === rec.userId ? null : rec.userId)}>
+            <div><span className="b">{rec.name}</span> <span className={`tag ${rec.role}`} style={{ marginLeft: 6 }}>{rec.role}</span><div className="mono dim" style={{ fontSize: 12 }}>{rec.email}</div></div>
+            <span style={{ display: "flex", alignItems: "center", gap: 10 }}><span className="dim" style={{ fontSize: 12 }}>{(rec.submittedAt || "").slice(0, 10)}</span><ChevronDown size={16} className="dim" style={{ transform: openId === rec.userId ? "rotate(180deg)" : "none" }} /></span>
           </div>
-          {openId === user.id && <div className="intake-answers">
+          {openId === rec.userId && <div className="intake-answers">
             {INTAKE_QS.map(([id2, question]) => <div key={id2} className="intake-a"><div className="intake-a-q">{question}</div><div className="intake-a-v">{rec.answers?.[id2] || <span className="dim">—</span>}</div></div>)}
           </div>}
         </div>
       ))}
-      {pending.length > 0 && <div className="card"><h3 className="disp h3">Not yet submitted</h3>{pending.map(({ user }) => <div key={user.id} className="row-between" style={{ padding: "6px 0" }}><span>{user.name} <span className="dim mono" style={{ fontSize: 12 }}>{user.email}</span></span><span className="tag" style={{ opacity: .6 }}>pending</span></div>)}</div>}
+      {pending.length > 0 && <div className="card"><h3 className="disp h3">Not yet submitted</h3>{pending.map((u) => <div key={u.id} className="row-between" style={{ padding: "6px 0" }}><span>{u.name} <span className="dim mono" style={{ fontSize: 12 }}>{u.email}</span></span><span className="tag" style={{ opacity: .6 }}>pending</span></div>)}</div>}
     </div>
   );
 }
@@ -357,7 +358,7 @@ function RoadmapView({ me }) {
                     {done ? <CheckCircle2 size={20} style={{ color: "var(--green)" }} /> : !locked ? (opened ? <ChevronDown size={18} className="dim" /> : <ChevronRight size={18} className="dim" />) : null}
                   </div>
                   {opened && <div className="day-body">
-                    {day.d === 7 && booking && <a className="book-call" href={booking} target="_blank" rel="noreferrer"><CalendarDays size={16} /> Book your 1-on-1 with Coach Josiah</a>}
+                    {day.d === 7 && booking && <a className="book-call" href={booking} target="_blank" rel="noreferrer"><CalendarDays size={16} /> Book your 1-on-1 with Coach Ryan</a>}
                     {items.map((it, i) => {
                       const on = checked(day.d).includes(i);
                       if (it.kind === "video") {
@@ -660,44 +661,18 @@ function Wins({ me }) {
 }
 
 /* ============================ COACHING CALL SCHEDULE ============================ */
-function Schedule({ isCoach }) {
-  const [sched, setSched] = useState(null); const [draft, setDraft] = useState(null); const [editing, setEditing] = useState(false); const [ok, setOk] = useState(false);
-  useEffect(() => { (async () => { const s = (await store.get(K.schedule)) || {}; setSched(s); setDraft(s); })(); }, []);
-  if (!sched) return <div className="empty">Loading schedule…</div>;
-  const setD = (day, k, v) => setDraft((d) => ({ ...d, [day]: { ...(d[day] || {}), [k]: v } }));
-  async function save() { await store.set(K.schedule, draft); setSched(draft); setEditing(false); setOk(true); setTimeout(() => setOk(false), 2500); }
+function Schedule() {
   return (
     <div>
-      <div className="row-between"><div><h2 className="section">Coaching Call Schedule</h2><p className="sub">Live coaching calls, Monday–Friday.</p></div>
-        {isCoach && (editing ? <div style={{ display: "flex", gap: 8 }}><button className="btn ghost" onClick={() => { setDraft(sched); setEditing(false); }}>Cancel</button><button className="btn" onClick={save}>Save schedule</button></div> : <button className="btn" onClick={() => setEditing(true)}><Cog size={15} /> Edit schedule</button>)}
+      <h2 className="section">Coaching Calls</h2>
+      <p className="sub">Live coaching calls run every weekday.</p>
+      <div className="card" style={{ textAlign: "center", padding: "36px 22px" }}>
+        <CalendarDays size={30} className="cyan" style={{ marginBottom: 12 }} />
+        <div className="disp" style={{ fontSize: 24, marginBottom: 8 }}>Calls Monday–Friday</div>
+        <p className="dim" style={{ fontSize: 15, margin: 0 }}>Times announced prior in the Discord.</p>
       </div>
-      {ok && <p className="ok">✓ Schedule saved for everyone.</p>}
-      <div style={{ display: "grid", gap: 12 }}>
-        {WEEKDAYS.map((day) => {
-          const c = (editing ? draft : sched)[day] || {};
-          return (
-            <div key={day} className="card sched">
-              <div className="sched-day">{day}{c.time && !editing && <span className="sched-time mono">{c.time}</span>}</div>
-              {editing ? (
-                <div className="grid2" style={{ marginTop: 10 }}>
-                  <div><label>Coach running it</label><input value={c.coach || ""} onChange={(e) => setD(day, "coach", e.target.value)} placeholder="Josiah" /></div>
-                  <div><label>Time</label><input value={c.time || ""} onChange={(e) => setD(day, "time", e.target.value)} placeholder="1:00 PM EST" /></div>
-                  <div style={{ gridColumn: "span 2" }}><label>What the call covers</label><input value={c.topic || ""} onChange={(e) => setD(day, "topic", e.target.value)} placeholder="Objection handling roleplay + call reviews" /></div>
-                  <div><label>Join via</label><select value={c.linkType || "meet"} onChange={(e) => setD(day, "linkType", e.target.value)}><option value="meet">Google Meet</option><option value="discord">Discord</option></select></div>
-                  <div><label>{(c.linkType || "meet") === "discord" ? "Discord link / channel" : "Google Meet link"}</label><input value={c.link || ""} onChange={(e) => setD(day, "link", e.target.value)} placeholder={(c.linkType || "meet") === "discord" ? "#coaching-stage or invite link" : "https://meet.google.com/…"} /></div>
-                </div>
-              ) : (
-                c.topic || c.coach ? (
-                  <div style={{ marginTop: 8 }}>
-                    <div className="disp" style={{ fontSize: 17 }}>{c.topic || "Coaching call"}</div>
-                    <div className="dim" style={{ fontSize: 13, marginTop: 4 }}>{c.coach ? `Run by ${c.coach}` : ""}</div>
-                    {c.link ? <a className="btn ghost sm" style={{ marginTop: 10 }} href={c.linkType === "discord" ? c.link : c.link} target="_blank" rel="noreferrer">{c.linkType === "discord" ? <><MessageSquare size={14} /> Join in Discord</> : <><Video size={14} /> Join Google Meet</>}</a> : <div className="hint" style={{ marginTop: 8 }}>No link set yet.</div>}
-                  </div>
-                ) : <div className="empty" style={{ padding: "16px 0", textAlign: "left" }}>No call scheduled.</div>
-              )}
-            </div>
-          );
-        })}
+      <div className="card" style={{ borderColor: "var(--cyan)", background: "rgba(34,211,238,.05)" }}>
+        <p style={{ margin: 0, fontSize: 14, color: "var(--text)", lineHeight: 1.5 }}><b className="cyan">Disclaimer:</b> If a coach is sick or has other important life factors, another coach will run their call instead.</p>
       </div>
     </div>
   );
@@ -772,8 +747,8 @@ function RoadmapLinks() {
       <p className="sub">Paste each lesson's URL (Whop, Loom, YouTube, Google Doc, etc.). Students see “Watch” (or “Read” for docs) once a link is set. Days can have multiple lessons.</p>
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="links-day-h"><CalendarDays size={14} className="cyan" style={{ verticalAlign: "-2px", marginRight: 6 }} />Day 7 — 1-on-1 booking link</div>
-        <div className="link-row"><span style={{ minWidth: 230, fontSize: 13 }}>Book a call with Coach Josiah</span><input value={booking} placeholder="https://calendly.com/…" onChange={(e) => setBooking(e.target.value)} /></div>
-        <p className="hint" style={{ marginTop: 6 }}>Students see a “Book your 1-on-1 with Coach Josiah” button on Day 7 once this is set.</p>
+        <div className="link-row"><span style={{ minWidth: 230, fontSize: 13 }}>Book a call with Coach Ryan</span><input value={booking} placeholder="https://calendly.com/…" onChange={(e) => setBooking(e.target.value)} /></div>
+        <p className="hint" style={{ marginTop: 6 }}>Students see a “Book your 1-on-1 with Coach Ryan” button on Day 7 once this is set.</p>
       </div>
       <div className="card">
         {ROADMAP.filter((d) => d.videos.length > 0).map((d) => (
