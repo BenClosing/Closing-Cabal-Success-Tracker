@@ -10,6 +10,11 @@ const INTAKE_CUTOFF = new Date("2026-07-03T00:00:00Z");
 
 async function loadProfile(user) {
   const preExisting = user.created_at ? new Date(user.created_at) < INTAKE_CUTOFF : false;
+  // Bulletproof: if the user has EVER submitted intake answers, they are done
+  // permanently — the saved answers prove it, even if the intakeDone flag failed to write.
+  let hasIntake = false;
+  try { hasIntake = !!(await db.get("cc3:intake:" + user.id)); } catch (e) { hasIntake = false; }
+  const intakeComplete = preExisting || hasIntake;
   let p = await profiles.get(user.id);
   if (!p) {
     p = {
@@ -19,14 +24,14 @@ async function loadProfile(user) {
       role: user.user_metadata?.role || "student",
       goal: "",
       onboarded: false,
-      intakeDone: preExisting,
+      intakeDone: intakeComplete,
       active: true,
       joinDate: today(),
     };
     await profiles.save(p);
   } else {
     let changed = false; const np = { ...p };
-    if (preExisting && !p.intakeDone) { np.intakeDone = true; changed = true; }
+    if (intakeComplete && !p.intakeDone) { np.intakeDone = true; changed = true; }
     const mr = user.user_metadata?.role;
     if ((mr === "admin" || mr === "coach") && p.role !== mr) { np.role = mr; changed = true; }
     if (changed) { p = np; await profiles.save(np); }
